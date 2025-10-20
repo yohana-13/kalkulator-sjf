@@ -1,40 +1,567 @@
-import React, { useState, useEffect } from 'react';
-
-export default function SJFScheduler() {
-  const [currentMode, setCurrentMode] = useState('noArrival');
-  const [numProcesses, setNumProcesses] = useState(4);
-  const [processes, setProcesses] = useState([
+// State variables
+let currentMode = 'noArrival';
+let numProcesses = 4;
+let processes = [
     { burst: 8, arrival: 9 },
     { burst: 10, arrival: 18 },
     { burst: 6, arrival: 2 },
     { burst: 3, arrival: 15 }
-  ]);
-  const [results, setResults] = useState(null);
-  const [showArrival, setShowArrival] = useState(false);
+];
+let results = null;
 
-  const selectMode = (mode) => {
-    setCurrentMode(mode);
-    setShowArrival(mode !== 'noArrival');
-    setResults(null);
-  };
+// Process colors
+const processColors = [
+    '#A0522D', '#CD853F', '#D2B48C', '#BC8F8F', 
+    '#F4A460', '#8B4513', '#D2691E', '#B87333', 
+    '#C4A484', '#966F33'
+];
 
-  const updateProcess = (index, field, value) => {
-    const newProcesses = [...processes];
-    newProcesses[index][field] = parseInt(value) || 0;
-    setProcesses(newProcesses);
-  };
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    setupEventListeners();
+    renderProcessInputs();
+});
 
-  const updateNumProcesses = (num) => {
-    setNumProcesses(num);
-    const newProcesses = [...processes];
-    while (newProcesses.length < num) {
-      newProcesses.push({ burst: 5, arrival: newProcesses.length });
+function setupEventListeners() {
+    // Mode buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.mode;
+            selectMode(mode);
+        });
+    });
+
+    // Number of processes
+    document.getElementById('numProcesses').addEventListener('input', (e) => {
+        updateNumProcesses(parseInt(e.target.value) || 2);
+    });
+
+    // Calculate button
+    document.getElementById('calculateBtn').addEventListener('click', calculate);
+}
+
+function selectMode(mode) {
+    currentMode = mode;
+    
+    // Update active button
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.mode === mode) {
+            btn.classList.add('active');
+        }
+    });
+
+    // Show/hide arrival time column
+    const showArrival = mode !== 'noArrival';
+    const header = document.getElementById('processHeader');
+    const arrivalHeader = document.getElementById('arrivalHeader');
+    
+    if (showArrival) {
+        header.classList.add('with-arrival');
+        arrivalHeader.style.display = 'block';
+    } else {
+        header.classList.remove('with-arrival');
+        arrivalHeader.style.display = 'none';
     }
-    setProcesses(newProcesses.slice(0, num));
-  };
+    
+    renderProcessInputs();
+    results = null;
+    document.getElementById('resultsSection').style.display = 'none';
+}
 
-  const calculateNoArrival = (procs) => {
+function updateNumProcesses(num) {
+    numProcesses = Math.min(Math.max(num, 2), 10);
+    document.getElementById('numProcesses').value = numProcesses;
+    
+    while (processes.length < numProcesses) {
+        processes.push({ burst: 5, arrival: processes.length });
+    }
+    processes = processes.slice(0, numProcesses);
+    
+    renderProcessInputs();
+}
+
+function renderProcessInputs() {
+    const container = document.getElementById('processInputs');
+    const showArrival = currentMode !== 'noArrival';
+    
+    container.innerHTML = '';
+    
+    for (let i = 0; i < numProcesses; i++) {
+        const row = document.createElement('div');
+        row.className = showArrival ? 'process-row with-arrival' : 'process-row';
+        
+        const label = document.createElement('div');
+        label.className = 'process-label';
+        label.textContent = `P${i + 1}`;
+        
+        const burstInput = document.createElement('input');
+        burstInput.type = 'number';
+        burstInput.min = '1';
+        burstInput.value = processes[i].burst;
+        burstInput.className = 'process-input';
+        burstInput.addEventListener('input', (e) => {
+            processes[i].burst = parseInt(e.target.value) || 0;
+        });
+        
+        row.appendChild(label);
+        row.appendChild(burstInput);
+        
+        if (showArrival) {
+            const arrivalInput = document.createElement('input');
+            arrivalInput.type = 'number';
+            arrivalInput.min = '0';
+            arrivalInput.value = processes[i].arrival;
+            arrivalInput.className = 'process-input';
+            arrivalInput.addEventListener('input', (e) => {
+                processes[i].arrival = parseInt(e.target.value) || 0;
+            });
+            row.appendChild(arrivalInput);
+        }
+        
+        container.appendChild(row);
+    }
+}
+
+function calculateNoArrival(procs) {
     let steps = [];
+    let procsData = procs.map((p, i) => ({
+        ...p,
+        id: `P${i + 1}`,
+        arrival: 0,
+        remaining: p.burst,
+        index: i
+    }));
+
+    procsData.sort((a, b) => a.burst - b.burst);
+
+    steps.push({
+        title: "Langkah 1: Urutkan Proses Berdasarkan Burst Time",
+        contentData: { "Deskripsi": `Proses diurutkan berdasarkan Burst Time (BT) dari terkecil ke terbesar karena tidak ada Arrival Time.` },
+        summary: `Urutan eksekusi: ${procsData.map(p => p.id).join(', ')}.`
+    });
+
+    let time = 0;
+    let completed = [];
+    let gantt = [];
+    let stepNum = 2;
+
+    procsData.forEach(current => {
+        gantt.push({ process: current.id, start: time, end: time + current.burst });
+        
+        steps.push({
+            title: `Langkah ${stepNum++}: Eksekusi ${current.id}`,
+            contentData: {
+                "Waktu Sekarang": time,
+                "Proses": current.id,
+                "Burst Time": current.burst,
+            },
+            summary: `Proses ${current.id} dieksekusi dari T=${time} hingga T=${time + current.burst}.`
+        });
+
+        time += current.burst;
+        current.completion = time;
+        current.turnaround = current.completion - current.arrival;
+        current.waiting = current.turnaround - current.burst;
+        
+        completed.push(current);
+    });
+
+    return { processes: completed, gantt, steps };
+}
+
+function calculateNonPreemptive(procs) {
+    let steps = [];
+    let sortedByArrival = procs.map((p, i) => ({
+        ...p,
+        id: `P${i + 1}`,
+        remaining: p.burst,
+        index: i
+    })).sort((a, b) => a.arrival - b.arrival);
+
+    steps.push({
+        title: "Langkah 1: Urutkan Proses Awal",
+        contentData: { "Deskripsi": `Proses diurutkan berdasarkan Waktu Kedatangan (AT) untuk memulai simulasi.` },
+        summary: `Urutan awal berdasarkan kedatangan: ${sortedByArrival.map(p => p.id).join(', ')}.`
+    });
+
+    let time = 0;
+    let completed = [];
+    let gantt = [];
+    let remaining = [...sortedByArrival];
+    let stepNum = 2;
+
+    while (remaining.length > 0) {
+        let available = remaining.filter(p => p.arrival <= time);
+        
+        if (available.length === 0) {
+            time = remaining[0].arrival;
+            continue;
+        }
+
+        available.sort((a, b) => a.burst - b.burst);
+        let current = available[0];
+        
+        gantt.push({ process: current.id, start: time, end: time + current.burst });
+        
+        steps.push({
+            title: `Langkah ${stepNum++}: Eksekusi ${current.id}`,
+            contentData: {
+                "Waktu Sekarang": time,
+                "Proses Tersedia": available.map(p => `${p.id}(BT:${p.burst})`).join(', '),
+                "Proses Dipilih": `${current.id} (BT Terpendek)`,
+            },
+            summary: `Proses ${current.id} dieksekusi dari T=${time} hingga T=${time + current.burst}.`
+        });
+
+        time += current.burst;
+        current.completion = time;
+        current.turnaround = current.completion - current.arrival;
+        current.waiting = current.turnaround - current.burst;
+        
+        completed.push(current);
+        remaining = remaining.filter(p => p.id !== current.id);
+    }
+
+    return { processes: completed, gantt, steps };
+}
+
+function calculatePreemptive(procs) {
+    let steps = [];
+    let time = 0;
+    let completedCount = 0;
+    let gantt = [];
+    let procsData = procs.map((p, i) => ({
+        ...p,
+        id: `P${i + 1}`,
+        remaining: p.burst,
+        index: i
+    }));
+
+    steps.push({
+        title: "Langkah 1: Inisialisasi SRTF",
+        contentData: { "Mode": "Preemptive (SRTF)" },
+        summary: `CPU akan selalu memilih proses dengan sisa waktu (Remaining Time) terpendek di antara proses yang telah tiba.`
+    });
+
+    let lastProcessId = null;
+    let segmentStart = 0;
+    let stepNum = 2;
+
+    while (completedCount < procsData.length) {
+        let available = procsData.filter(p => p.arrival <= time && p.remaining > 0);
+        
+        if (available.length === 0) {
+            time++;
+            continue;
+        }
+
+        available.sort((a, b) => a.remaining - b.remaining);
+        let current = available[0];
+
+        if (lastProcessId !== current.id) {
+            if (lastProcessId !== null) {
+                gantt.push({ process: lastProcessId, start: segmentStart, end: time });
+            }
+            segmentStart = time;
+            lastProcessId = current.id;
+            steps.push({
+                title: `Langkah ${stepNum++}: Waktu ${time} - CPU beralih ke ${current.id}`,
+                contentData: {
+                    "Waktu": time,
+                    "Proses Tersedia": available.map(p => `${p.id}(sisa:${p.remaining})`).join(', '),
+                    "Proses Dipilih": `${current.id} (Sisa Terpendek)`,
+                },
+                summary: `CPU mulai mengeksekusi ${current.id} karena memiliki sisa waktu paling sedikit.`
+            });
+        }
+
+        current.remaining--;
+        time++;
+
+        if (current.remaining === 0) {
+            current.completion = time;
+            current.turnaround = current.completion - current.arrival;
+            current.waiting = current.turnaround - current.burst;
+            completedCount++;
+            gantt.push({ process: lastProcessId, start: segmentStart, end: time });
+            lastProcessId = null;
+        }
+    }
+    return { processes: procsData, gantt, steps };
+}
+
+function calculate() {
+    let result;
+    const activeProcesses = processes.slice(0, numProcesses);
+    
+    if (currentMode === 'noArrival') {
+        result = calculateNoArrival(activeProcesses);
+    } else if (currentMode === 'preemptive') {
+        result = calculatePreemptive(activeProcesses);
+    } else {
+        result = calculateNonPreemptive(activeProcesses);
+    }
+    
+    results = result;
+    renderResults();
+}
+
+function renderResults() {
+    document.getElementById('resultsSection').style.display = 'block';
+    
+    renderSteps();
+    renderGanttChart();
+    renderCalculations();
+    renderTable();
+    renderSummary();
+    
+    // Scroll to results
+    document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderSteps() {
+    const container = document.getElementById('stepsContainer');
+    container.innerHTML = '';
+    
+    results.steps.forEach((step, index) => {
+        const accordion = document.createElement('div');
+        accordion.className = 'step-accordion';
+        
+        const header = document.createElement('div');
+        header.className = 'step-header';
+        
+        const headerContent = document.createElement('div');
+        headerContent.className = 'step-header-content';
+        
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.setAttribute('class', 'step-icon');
+        icon.setAttribute('fill', 'none');
+        icon.setAttribute('viewBox', '0 0 24 24');
+        icon.setAttribute('stroke-width', '1.5');
+        
+        if (index === 0) {
+            icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25m5.25-.75L17.25 9m0 0L21 12.75M17.25 9v12" />';
+        } else {
+            icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m3.75 3.75h-1.5m-15 3.75h1.5m15 0h1.5m-15 3.75h1.5m15 0h1.5" /><circle cx="12" cy="12" r="3" stroke-linecap="round" stroke-linejoin="round" />';
+        }
+        
+        const title = document.createElement('span');
+        title.textContent = step.title;
+        
+        headerContent.appendChild(icon);
+        headerContent.appendChild(title);
+        
+        const arrow = document.createElement('span');
+        arrow.className = index === 0 ? 'step-arrow open' : 'step-arrow';
+        arrow.textContent = '▼';
+        
+        header.appendChild(headerContent);
+        header.appendChild(arrow);
+        
+        const content = document.createElement('div');
+        content.className = index === 0 ? 'step-content open' : 'step-content';
+        
+        const dataGrid = document.createElement('div');
+        dataGrid.className = 'step-data-grid';
+        
+        Object.entries(step.contentData).forEach(([key, value]) => {
+            const item = document.createElement('div');
+            item.className = 'step-data-item';
+            
+            const label = document.createElement('div');
+            label.className = 'step-data-label';
+            label.textContent = key;
+            
+            const valueDiv = document.createElement('div');
+            valueDiv.className = 'step-data-value';
+            valueDiv.textContent = value;
+            
+            item.appendChild(label);
+            item.appendChild(valueDiv);
+            dataGrid.appendChild(item);
+        });
+        
+        const summary = document.createElement('div');
+        summary.className = 'step-summary';
+        const summaryP = document.createElement('p');
+        summaryP.textContent = step.summary;
+        summary.appendChild(summaryP);
+        
+        content.appendChild(dataGrid);
+        content.appendChild(summary);
+        
+        header.addEventListener('click', () => {
+            content.classList.toggle('open');
+            arrow.classList.toggle('open');
+        });
+        
+        accordion.appendChild(header);
+        accordion.appendChild(content);
+        container.appendChild(accordion);
+    });
+}
+
+function renderGanttChart() {
+    const container = document.getElementById('ganttChart');
+    container.innerHTML = '';
+    
+    const ganttContainer = document.createElement('div');
+    ganttContainer.className = 'gantt-container';
+    
+    const bars = document.createElement('div');
+    bars.className = 'gantt-bars';
+    
+    const totalDuration = results.gantt[results.gantt.length - 1].end;
+    
+    results.gantt.forEach((g, i) => {
+        const duration = g.end - g.start;
+        const width = (duration / totalDuration) * 100;
+        const processIndex = parseInt(g.process.substring(1)) - 1;
+        const color = processColors[processIndex % processColors.length];
+        
+        const bar = document.createElement('div');
+        bar.className = 'gantt-bar';
+        bar.style.width = `${width}%`;
+        bar.style.background = color;
+        bar.textContent = g.process;
+        
+        bars.appendChild(bar);
+    });
+    
+    const timeline = document.createElement('div');
+    timeline.className = 'gantt-timeline';
+    
+    const startTime = document.createElement('div');
+    startTime.className = 'gantt-time-start';
+    startTime.textContent = results.gantt[0]?.start || 0;
+    timeline.appendChild(startTime);
+    
+    results.gantt.forEach((g, i) => {
+        const duration = g.end - g.start;
+        const width = (duration / totalDuration) * 100;
+        
+        const timeEnd = document.createElement('div');
+        timeEnd.className = 'gantt-time-end';
+        timeEnd.style.width = `${width}%`;
+        timeEnd.textContent = g.end;
+        timeline.appendChild(timeEnd);
+    });
+    
+    ganttContainer.appendChild(bars);
+    ganttContainer.appendChild(timeline);
+    container.appendChild(ganttContainer);
+}
+
+function renderCalculations() {
+    const grid = document.getElementById('calculationsGrid');
+    grid.className = 'calculations-grid';
+    grid.innerHTML = '';
+    
+    const sortedProcesses = [...results.processes].sort((a, b) => 
+        a.id.localeCompare(b.id, undefined, { numeric: true })
+    );
+    
+    sortedProcesses.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'calc-card';
+        
+        const title = document.createElement('h4');
+        title.textContent = `Proses ${p.id}`;
+        card.appendChild(title);
+        
+        const tatSection = document.createElement('div');
+        tatSection.style.marginBottom = '15px';
+        
+        const tatFormula = document.createElement('div');
+        tatFormula.className = 'calc-formula';
+        tatFormula.textContent = 'TAT = CT - AT';
+        
+        const tatResult = document.createElement('p');
+        tatResult.className = 'calc-result';
+        tatResult.textContent = `${p.turnaround} = ${p.completion} - ${p.arrival}`;
+        
+        tatSection.appendChild(tatFormula);
+        tatSection.appendChild(tatResult);
+        
+        const wtSection = document.createElement('div');
+        
+        const wtFormula = document.createElement('div');
+        wtFormula.className = 'calc-formula';
+        wtFormula.textContent = 'WT = TAT - BT';
+        
+        const wtResult = document.createElement('p');
+        wtResult.className = 'calc-result';
+        wtResult.textContent = `${p.waiting} = ${p.turnaround} - ${p.burst}`;
+        
+        wtSection.appendChild(wtFormula);
+        wtSection.appendChild(wtResult);
+        
+        card.appendChild(tatSection);
+        card.appendChild(wtSection);
+        grid.appendChild(card);
+    });
+    
+    // Average calculations
+    const avgTAT = results.processes.reduce((sum, p) => sum + p.turnaround, 0) / results.processes.length;
+    const avgWT = results.processes.reduce((sum, p) => sum + p.waiting, 0) / results.processes.length;
+    
+    const tatValues = sortedProcesses.map(p => p.turnaround).join(' + ');
+    const wtValues = sortedProcesses.map(p => p.waiting).join(' + ');
+    
+    document.getElementById('avgTATCalc').textContent = 
+        `${avgTAT.toFixed(2)} = (${tatValues}) / ${results.processes.length}`;
+    document.getElementById('avgWTCalc').textContent = 
+        `${avgWT.toFixed(2)} = (${wtValues}) / ${results.processes.length}`;
+}
+
+function renderTable() {
+    const table = document.getElementById('resultsTable');
+    table.innerHTML = '';
+    
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    
+    ['Proses', 'Arrival Time', 'Burst Time', 'Completion Time', 'Turnaround Time', 'Waiting Time'].forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+    });
+    
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    
+    const tbody = document.createElement('tbody');
+    
+    const sortedProcesses = [...results.processes].sort((a, b) => {
+        if (currentMode === 'noArrival') {
+            return a.burst - b.burst;
+        }
+        return a.arrival - b.arrival || a.id.localeCompare(b.id, undefined, { numeric: true });
+    });
+    
+    sortedProcesses.forEach(p => {
+        const row = document.createElement('tr');
+        
+        [p.id, p.arrival, p.burst, p.completion, p.turnaround, p.waiting].forEach(value => {
+            const td = document.createElement('td');
+            td.textContent = value;
+            row.appendChild(td);
+        });
+        
+        tbody.appendChild(row);
+    });
+    
+    table.appendChild(tbody);
+}
+
+function renderSummary() {
+    const avgWT = results.processes.reduce((sum, p) => sum + p.waiting, 0) / results.processes.length;
+    const avgTAT = results.processes.reduce((sum, p) => sum + p.turnaround, 0) / results.processes.length;
+    
+    document.getElementById('summaryWT').textContent = avgWT.toFixed(2);
+    document.getElementById('summaryTAT').textContent = avgTAT.toFixed(2);
+                      }    let steps = [];
     let procsData = procs.map((p, i) => ({
       ...p,
       id: `P${i + 1}`,
@@ -506,3 +1033,4 @@ function StepAccordion({ step, index }) {
     </div>
   );
       }
+
