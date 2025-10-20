@@ -19,16 +19,12 @@ function generateInputs() {
     }
     html += `</div>`;
     
-    // Default values
-    const defaultBursts = [8, 10, 6, 3, 5, 7, 4, 9, 2, 5];
-    const defaultArrivals = [2, 8, 17, 20, 4, 5, 6, 7, 8, 9];
-    
     for (let i = 0; i < num; i++) {
         html += `<div class="process-row">
                     <div class="process-label">P${i + 1}</div>
-                    <div><input type="number" id="burst${i}" value="${defaultBursts[i] || 5}" min="1" placeholder="Burst Time"></div>`;
+                    <div><input type="number" id="burst${i}" value="" min="1" placeholder="cth: 32"></div>`;
         if (showArrival) {
-            html += `<div><input type="number" id="arrival${i}" value="${defaultArrivals[i] || i}" min="0" placeholder="Arrival Time"></div>`;
+            html += `<div><input type="number" id="arrival${i}" value="" min="0" placeholder="cth: 42"></div>`;
         }
         html += `</div>`;
     }
@@ -41,11 +37,30 @@ function calculate() {
     let processes = [];
     
     for (let i = 0; i < num; i++) {
+        const burstInput = document.getElementById(`burst${i}`);
+        const arrivalInput = document.getElementById(`arrival${i}`);
+
+        const burst = parseInt(burstInput.value);
+        if (isNaN(burst) || burst <= 0) {
+            alert(`Burst Time untuk Proses P${i+1} harus berupa angka lebih besar dari 0.`);
+            return;
+        }
+
+        let arrival = 0;
+        if (currentMode !== 'noArrival' && arrivalInput) {
+            const arrivalVal = parseInt(arrivalInput.value);
+            if(isNaN(arrivalVal) || arrivalVal < 0) {
+                alert(`Arrival Time untuk Proses P${i+1} harus berupa angka 0 atau lebih.`);
+                return;
+            }
+            arrival = arrivalVal;
+        }
+
         processes.push({
             id: `P${i + 1}`,
-            burst: parseInt(document.getElementById(`burst${i}`).value),
-            arrival: currentMode === 'noArrival' ? 0 : parseInt(document.getElementById(`arrival${i}`).value),
-            remaining: parseInt(document.getElementById(`burst${i}`).value),
+            burst: burst,
+            arrival: arrival,
+            remaining: burst,
             originalIndex: i
         });
     }
@@ -123,54 +138,53 @@ function calculateNoArrival(processes) {
 
 function calculateNonPreemptive(processes) {
     let steps = [];
-    
-    let sortedByArrival = [...processes].sort((a, b) => {
-        if (a.arrival === b.arrival) return a.burst - b.burst;
-        return a.arrival - b.arrival;
-    });
-    
-    steps.push({
-        title: "Langkah 1: Proses Tiba",
-        contentData: { 
-            "Deskripsi": `Proses diurutkan berdasarkan waktu kedatangan (Arrival Time). Jika ada yang datang bersamaan, dahulukan yang Burst Time-nya terkecil.`,
-            "Urutan Awal": sortedByArrival.map(p => `${p.id}(AT:${p.arrival}, BT:${p.burst})`).join(' → ')
-        },
-        summary: `Antrian awal terbentuk berdasarkan siapa yang datang lebih dulu.`
-    });
-
-    let time = 0;
     let completed = [];
     let gantt = [];
-    let remaining = [...sortedByArrival];
+    let remaining = JSON.parse(JSON.stringify(processes));
+    let time = 0;
     let stepNum = 2;
-    
-    if (remaining.length > 0 && remaining[0].arrival > 0) {
-         time = remaining[0].arrival;
-         steps.push({
-            title: `Langkah ${stepNum}: Menunggu Proses Pertama`,
-            contentData: {
-                "Waktu Sekarang": 0,
-                "Proses Tersedia": "Tidak ada",
-                "Tindakan": `CPU menganggur`,
-                "Proses Berikutnya": `${remaining[0].id} (Tiba di T=${time})`
-            },
-            summary: `Waktu berlalu... CPU beristirahat sejenak hingga T=${time}, menunggu proses pertama untuk tiba.`
-        });
-        stepNum++;
+
+    // Find the first arrival time to start the clock
+    if (remaining.length > 0) {
+        const firstArrival = Math.min(...remaining.map(p => p.arrival));
+        time = firstArrival;
+        if (time > 0) {
+             gantt.push({ process: 'Menganggur', start: 0, end: time });
+             steps.push({
+                title: `Langkah 1: Menunggu Proses Pertama`,
+                contentData: {
+                    "Waktu": `0 → ${time}`,
+                    "Status CPU": "Menganggur",
+                    "Alasan": "Belum ada proses yang tiba di antrian."
+                },
+                summary: `CPU beristirahat hingga T=${time}, saat proses pertama dijadwalkan tiba.`
+            });
+        }
     }
+    
+    steps.push({
+        title: `Langkah ${time > 0 ? '2' : '1'}: Tinjauan Awal Proses`,
+        contentData: { 
+            "Deskripsi": `Proses yang ada akan dievaluasi berdasarkan Arrival Time dan Burst Time.`,
+            "Strategi": "Non-Preemptive SJF"
+        },
+        summary: `Sistem siap memilih proses terpendek yang telah tiba.`
+    });
+    if(time>0) stepNum++;
+
 
     while (remaining.length > 0) {
         let available = remaining.filter(p => p.arrival <= time);
         
         if (available.length === 0) {
             const nextArrival = Math.min(...remaining.map(p => p.arrival));
+            gantt.push({ process: 'Menganggur', start: time, end: nextArrival });
             steps.push({
                 title: `Langkah ${stepNum}: CPU Menganggur`,
                 contentData: {
                     "Waktu Sekarang": time,
                     "Proses Tersedia": "Tidak ada",
-                    "Tindakan": `Maju ke waktu kedatangan berikutnya`,
-                    "Proses Berikutnya": `Tiba di T=${nextArrival}`
+                    "Tindakan": `Maju ke T=${nextArrival}`,
                 },
                 summary: `Tidak ada pekerjaan saat ini. CPU menganggur lagi hingga T=${nextArrival}.`
             });
@@ -199,16 +213,18 @@ function calculateNonPreemptive(processes) {
         gantt.push({ process: current.id, start: startTime, end: endTime });
         
         time = endTime;
-        current.completion = time;
-        current.turnaround = current.completion - current.arrival;
-        current.waiting = current.turnaround - current.burst;
         
-        completed.push(current);
+        const originalProcess = processes.find(p => p.id === current.id);
+        originalProcess.completion = time;
+        originalProcess.turnaround = originalProcess.completion - originalProcess.arrival;
+        originalProcess.waiting = originalProcess.turnaround - originalProcess.burst;
+        
+        completed.push(originalProcess);
         remaining = remaining.filter(p => p.id !== current.id);
         stepNum++;
     }
 
-    return { processes: completed, gantt, steps };
+    return { processes: processes, gantt, steps };
 }
 
 
@@ -237,7 +253,13 @@ function calculatePreemptive(processes) {
         let available = procs.filter(p => p.arrival <= time && p.remaining > 0);
         
         if (available.length === 0) {
-            time++;
+            const nextArrival = Math.min(...procs.filter(p => p.remaining > 0).map(p => p.arrival));
+            if (nextArrival > time) {
+                gantt.push({ process: 'Menganggur', start: time, end: nextArrival });
+                time = nextArrival;
+            } else {
+                time++;
+            }
             continue;
         }
 
@@ -259,6 +281,10 @@ function calculatePreemptive(processes) {
                 });
                 stepNum++;
             } else {
+                 const lastGanttEnd = gantt.length > 0 ? gantt[gantt.length-1].end : 0;
+                 if (time > lastGanttEnd) {
+                     gantt.push({ process: 'Menganggur', start: lastGanttEnd, end: time });
+                 }
                  steps.push({
                     title: `Langkah ${stepNum}: Eksekusi Dimulai`,
                     contentData: {
@@ -278,9 +304,10 @@ function calculatePreemptive(processes) {
         time++;
 
         if (current.remaining === 0) {
-            current.completion = time;
-            current.turnaround = current.completion - current.arrival;
-            current.waiting = current.turnaround - current.burst;
+            const originalProcess = processes.find(p => p.id === current.id);
+            originalProcess.completion = time;
+            originalProcess.turnaround = originalProcess.completion - originalProcess.arrival;
+            originalProcess.waiting = originalProcess.turnaround - originalProcess.burst;
             completedCount++;
             gantt.push({ process: lastProcessId, start: segmentStart, end: time });
             
@@ -289,7 +316,7 @@ function calculatePreemptive(processes) {
                 contentData: {
                     "Waktu Selesai": time,
                     "Proses": current.id,
-                    "Total Proses Selesai": `${completedCount} dari ${procs.length}`,
+                    "Total Proses Selesai": `${completedCount} dari procs.length}`,
                 },
                 summary: `Misi tuntas! ${current.id} telah menyelesaikan tugasnya pada T=${time}.`
             });
@@ -298,7 +325,7 @@ function calculatePreemptive(processes) {
         }
     }
     
-    return { processes: procs, gantt, steps };
+    return { processes: processes, gantt, steps };
 }
 
 function displayResults(result) {
@@ -308,8 +335,9 @@ function displayResults(result) {
     let avgTAT = processes.reduce((sum, p) => sum + p.turnaround, 0) / processes.length;
     
     const processColors = ['#D2B48C', '#A0522D', '#BC8F8F', '#CD853F', '#8B4513', '#D2691E', '#F4A460', '#DEB887', '#E6B0AA', '#B8860B'];
-    const totalDuration = gantt.length > 0 ? gantt[gantt.length - 1].end - gantt[0].start : 0;
     const timelineStart = gantt.length > 0 ? gantt[0].start : 0;
+    const timelineEnd = gantt.length > 0 ? gantt[gantt.length - 1].end : 0;
+    const totalDuration = timelineEnd - timelineStart;
 
     const ganttChartHTML = `
         <div class="results-section gantt-wrapper-new">
@@ -326,21 +354,21 @@ function displayResults(result) {
                     ${gantt.map(g => {
                         const duration = g.end - g.start;
                         const percentageWidth = totalDuration > 0 ? (duration / totalDuration) * 100 : 0;
-                        const processIndex = parseInt(g.process.substring(1)) - 1;
-                        const color = processColors[processIndex % processColors.length];
-                        return `<div class="gantt-segment-new" style="width: ${percentageWidth}%; background-color: ${color};">
-                                    ${g.process}
+                        const isIdle = g.process === 'Menganggur';
+                        const processIndex = isIdle ? -1 : parseInt(g.process.substring(1)) - 1;
+                        const color = isIdle ? 'transparent' : processColors[processIndex % processColors.length];
+                        const segmentClass = isIdle ? 'gantt-segment-new gantt-idle-segment' : 'gantt-segment-new';
+                        
+                        return `<div class="${segmentClass}" style="width: ${percentageWidth}%; background-color: ${color};">
+                                    ${isIdle ? '' : g.process}
                                 </div>`;
                     }).join('')}
                 </div>
                 <div class="gantt-timescale-new">
-                     <div class="time-point" style="left: 0%;">
-                        <span>${timelineStart}</span>
-                    </div>
-                    ${gantt.map(g => {
-                        const endPosition = totalDuration > 0 ? ((g.end - timelineStart) / totalDuration) * 100 : 0;
-                        return `<div class="time-point" style="left: ${endPosition}%;">
-                                    <span>${g.end}</span>
+                    ${[...new Set(gantt.flatMap(g => [g.start, g.end]))].map(timePoint => {
+                        const position = totalDuration > 0 ? ((timePoint - timelineStart) / totalDuration) * 100 : 0;
+                        return `<div class="time-point" style="left: ${position}%;">
+                                    <span>${timePoint}</span>
                                 </div>`;
                     }).join('')}
                 </div>
@@ -359,7 +387,7 @@ function displayResults(result) {
             <div class="steps-timeline">
                 ${steps.map((step, index) => {
                     let icon = '⚡';
-                    if (step.title.includes('Urutkan') || step.title.includes('Tiba')) icon = '📊';
+                    if (step.title.includes('Urutkan') || step.title.includes('Tiba') || step.title.includes('Tinjauan')) icon = '📊';
                     else if (step.title.includes('Beralih') || step.title.includes('Interupsi')) icon = '🔄';
                     else if (step.title.includes('Selesai')) icon = '✅';
                     else if (step.title.includes('Menunggu') || step.title.includes('Menganggur')) icon = '⏳';
@@ -484,7 +512,7 @@ function displayResults(result) {
                 </div>
                 <div class="summary-item">
                     <div class="summary-label">⏰ Total Waktu Eksekusi</div>
-                    <div class="summary-value">${gantt.length > 0 ? gantt[gantt.length-1].end : 0}</div>
+                    <div class="summary-value">${timelineEnd}</div>
                     <div class="summary-desc">Waktu total yang dibutuhkan</div>
                 </div>
                 <div class="summary-item">
@@ -522,3 +550,4 @@ document.addEventListener('DOMContentLoaded', () => {
     applyTheme(savedTheme);
     generateInputs();
 });
+
