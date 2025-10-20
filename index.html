@@ -3,87 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kalkulator SJF</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./styles.css">
+    <title>SJF Scheduler Calculator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>Kalkulator SJF</h1>
-            <p class="subtitle">Kalkulator Shortest Job First dengan Solusi Langkah-demi-Langkah</p>
-        </div>
+        <div class="main-card">
+            <h1 class="main-title">🎯 SJF Scheduler Calculator</h1>
+            <p class="subtitle">Shortest Job First - CPU Scheduling Algorithm</p>
 
-        <div class="mode-selector">
-            <div class="mode-btn active" onclick="selectMode('noArrival')">
-                <strong>🎯 Tanpa Waktu Kedatangan</strong><br>
-                <small>Semua proses datang bersamaan</small>
-            </div>
-            <div class="mode-btn" onclick="selectMode('withArrival')">
-                <strong>⏰ Dengan Waktu Kedatangan</strong><br>
-                <small>Proses datang berbeda waktu</small>
-            </div>
-            <div class="mode-btn" onclick="selectMode('preemptive')">
-                <strong>⚡ Preemptive (SRTF)</strong><br>
-                <small>Dapat diinterupsi</small>
-            </div>
-            <div class="mode-btn" onclick="selectMode('nonPreemptive')">
-                <strong>🔒 Non-Preemptive</strong><br>
-                <small>Tidak dapat diinterupsi</small>
-            </div>
-        </div>
-
-        <div class="formula-section">
-            <h3>📐 Rumus-rumus Penting</h3>
-            <div class="formula-grid">
-                <div class="formula-card">
-                    <div class="formula-title">
-                        <svg class="formula-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span>Turnaround Time (TAT)</span>
-                    </div>
-                    <div class="formula-expression">TAT <span>=</span> CT <span>-</span> AT</div>
-                </div>
-                <div class="formula-card">
-                    <div class="formula-title">
-                        <svg class="formula-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4-2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128a2.251 2.251 0 01-4.244 0c-.142-.348-.22-.729-.22-1.128a3 3 0 00-5.78-1.128 2.25 2.25 0 112.4 2.245 4.5 4.5 0 00-8.4 2.245c0 .399.078.78.22 1.128a2.25 2.25 0 014.244 0c.142.348.22.729.22 1.128a3 3 0 005.78 1.128z" /></svg>
-                        <span>Waiting Time (WT)</span>
-                    </div>
-                    <div class="formula-expression">WT <span>=</span> TAT <span>-</span> BT</div>
-                </div>
-                <div class="formula-card">
-                    <div class="formula-title">
-                        <svg class="formula-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span>Avg. Turnaround Time</span>
-                    </div>
-                    <div class="formula-expression">Avg TAT <span>=</span> (Σ TAT) / N</div>
-                </div>
-                <div class="formula-card">
-                    <div class="formula-title">
-                        <svg class="formula-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 15.75l-2.489-2.489m0 0a3.375 3.375 0 10-4.773-4.773 3.375 3.375 0 004.774 4.774zM21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span>Avg. Waiting Time</span>
-                    </div>
-                    <div class="formula-expression">Avg WT <span>=</span> (Σ WT) / N</div>
+            <!-- Mode Selection -->
+            <div class="section">
+                <label class="section-label">Mode Penjadwalan:</label>
+                <div class="mode-buttons">
+                    <button class="mode-btn active" data-mode="noArrival">🔵 SJF - Tanpa Arrival Time</button>
+                    <button class="mode-btn" data-mode="withArrival">🟢 SJF - Dengan Arrival Time</button>
+                    <button class="mode-btn" data-mode="nonPreemptive">🟡 SJF Non-Preemptive</button>
+                    <button class="mode-btn" data-mode="preemptive">🟠 SJF Preemptive (SRTF)</button>
                 </div>
             </div>
-        </div>
 
-
-        <div class="input-section">
-            <div class="input-group">
-                <label>🔢 Jumlah Proses:</label>
-                <input type="number" id="numProcesses" value="4" min="1" max="10" onchange="generateInputs()">
+            <!-- Number of Processes -->
+            <div class="section">
+                <label class="section-label">Jumlah Proses:</label>
+                <input type="number" id="numProcesses" min="2" max="10" value="4" class="input-field">
             </div>
-            <div id="processInputs" class="process-inputs"></div>
-            <button onclick="calculate()" style="width: 100%; margin-top: 20px;">
-                🚀 Hitung SJF Scheduling
-            </button>
+
+            <!-- Process Inputs -->
+            <div class="section">
+                <div class="process-header" id="processHeader">
+                    <div>Proses</div>
+                    <div>Burst Time</div>
+                    <div id="arrivalHeader" style="display: none;">Arrival Time</div>
+                </div>
+                <div id="processInputs"></div>
+            </div>
+
+            <button id="calculateBtn" class="calculate-btn">🚀 Hitung SJF Scheduling</button>
         </div>
 
-        <div id="results" class="result-section hidden"></div>
+        <!-- Results Section -->
+        <div id="resultsSection" style="display: none;">
+            <!-- Steps -->
+            <div class="results-card">
+                <h3 class="results-title">📝 Langkah-langkah Penyelesaian</h3>
+                <div id="stepsContainer"></div>
+            </div>
+
+            <!-- Gantt Chart -->
+            <div class="results-card">
+                <h3 class="results-title">📊 Gantt Chart</h3>
+                <div id="ganttChart"></div>
+            </div>
+
+            <!-- Calculations -->
+            <div class="results-card">
+                <h3 class="results-title">🧮 Menghitung dengan Rumus</h3>
+                <div id="calculationsGrid"></div>
+                <div class="averages-grid">
+                    <div class="average-card avg-tat">
+                        <h4>Rata-rata Turnaround Time</h4>
+                        <div class="formula-box">Avg TAT = (Σ TAT) / N</div>
+                        <p id="avgTATCalc"></p>
+                    </div>
+                    <div class="average-card avg-wt">
+                        <h4>Rata-rata Waiting Time</h4>
+                        <div class="formula-box">Avg WT = (Σ WT) / N</div>
+                        <p id="avgWTCalc"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="results-card">
+                <h3 class="results-title">📋 Tabel Hasil</h3>
+                <div class="table-container">
+                    <table id="resultsTable"></table>
+                </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div class="summary-label">⏱ Average Waiting Time</div>
+                    <div class="summary-value" id="summaryWT"></div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">🔄 Average Turnaround Time</div>
+                    <div class="summary-value" id="summaryTAT"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="./script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
